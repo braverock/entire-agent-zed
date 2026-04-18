@@ -366,9 +366,9 @@ func handleInstallHooks() {
 		hookPath := filepath.Join(repoRoot, ".git", "hooks", "pre-commit")
 		hookContent := `
 # --- Entire Zed Agent Lifecycle Hook ---
+export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:$PATH"
 ENTIRE_CMD="entire"
 if command -v entire-patched >/dev/null 2>&1; then ENTIRE_CMD="entire-patched"; fi
-if [ -x "$HOME/.local/bin/entire-patched" ]; then ENTIRE_CMD="$HOME/.local/bin/entire-patched"; fi
 
 ENTIRE_STATUS=$($ENTIRE_CMD status 2>/dev/null)
 if ! echo "$ENTIRE_STATUS" | grep -q "Zed ·"; then
