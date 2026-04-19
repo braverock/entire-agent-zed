@@ -13,7 +13,7 @@
     },
     "time": {
       "created": 1776560561382,
-      "updated": 1776562606938
+      "updated": 1776562624729
     }
   },
   "messages": [
@@ -12602,19 +12602,22 @@
         },
         "cost": 0,
         "tokens": {
-          "input": 0,
-          "output": 0,
+          "total": 102501,
+          "input": 1,
+          "output": 389,
           "reasoning": 0,
           "cache": {
-            "read": 0,
-            "write": 0
+            "write": 416,
+            "read": 101695
           }
         },
         "modelID": "claude-opus-4.6",
         "providerID": "github-copilot",
         "time": {
-          "created": 1776562606843
+          "created": 1776562606843,
+          "completed": 1776562621150
         },
+        "finish": "tool-calls",
         "id": "msg_da36212fb001i07t0cmGk7LOvi",
         "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz"
       },
@@ -12631,22 +12634,204 @@
           "tool": "bash",
           "callID": "toolu_bdrk_01DyanJVPi9wySasK1FC6TY9",
           "state": {
-            "metadata": {
-              "output": "",
-              "description": "Commit all changes"
-            },
-            "status": "running",
+            "status": "completed",
             "input": {
               "command": "cd /home/brian/mule_dev/R/entire-agent-zed && git commit -m \"feat: overhaul lifecycle hooks, add branch extraction and test suite\n\nHook lifecycle:\n- Move from pre-commit to post-commit so turn-end fires after commit SHA exists\n- Auto-migrate legacy pre-commit hook blocks on install\n- Each turn now represents conversation between consecutive commits\n- turn-end/session-end events include token usage snapshots\n- Fall back to git rev-parse when ENTIRE_REPO_ROOT is unset\n\nSession and transcript improvements:\n- Derive session ID from actual Zed thread UUID (not static 'zed-current')\n- Extract real last user prompt from thread (not hardcoded placeholder)\n- Include message count watermark for transcript delta calculations\n- Add macOS database path support via runtime.GOOS\n\nNew subcommands:\n- 'attach' — capture research/planning threads that produce no commits\n- 'extract-branch' — correlate Zed transcripts with branch commit history,\n  with deduplicated per-thread token reporting and branch-level rollup\n\nBuild and test:\n- Add Makefile with build/test/install/uninstall/clean targets\n- Add 40-test suite covering transcript parsing, token extraction,\n  hook install/uninstall/migration, parse-hook events, token inclusion\n  policy, and git root fallback behavior\"",
               "description": "Commit all changes"
             },
+            "output": "[master 64184a8] feat: overhaul lifecycle hooks, add branch extraction and test suite\n 4 files changed, 1715 insertions(+), 57 deletions(-)\n create mode 100644 Makefile\n create mode 100644 main_test.go\n",
+            "metadata": {
+              "output": "[master 64184a8] feat: overhaul lifecycle hooks, add branch extraction and test suite\n 4 files changed, 1715 insertions(+), 57 deletions(-)\n create mode 100644 Makefile\n create mode 100644 main_test.go\n",
+              "exit": 0,
+              "description": "Commit all changes",
+              "truncated": false
+            },
+            "title": "Commit all changes",
             "time": {
-              "start": 1776562617581
+              "start": 1776562621116,
+              "end": 1776562621119
             }
           },
           "id": "prt_da3621dcb001Gn0E0ThPFP76Em",
           "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
           "messageID": "msg_da36212fb001i07t0cmGk7LOvi"
+        },
+        {
+          "reason": "tool-calls",
+          "snapshot": "790cc4e208bbc24b481d538e4328182a202049bf",
+          "type": "step-finish",
+          "tokens": {
+            "total": 102501,
+            "input": 1,
+            "output": 389,
+            "reasoning": 0,
+            "cache": {
+              "write": 416,
+              "read": 101695
+            }
+          },
+          "cost": 0,
+          "id": "prt_da3624ac0001VZf0WDaFf0Qk1a",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da36212fb001i07t0cmGk7LOvi"
+        }
+      ]
+    },
+    {
+      "info": {
+        "parentID": "msg_da361d089001eg7G03FDlYDeHW",
+        "role": "assistant",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/brian/mule_dev/R/entire-agent-zed",
+          "root": "/home/brian/mule_dev/R/entire-agent-zed"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 102678,
+          "input": 1,
+          "output": 96,
+          "reasoning": 0,
+          "cache": {
+            "write": 470,
+            "read": 102111
+          }
+        },
+        "modelID": "claude-opus-4.6",
+        "providerID": "github-copilot",
+        "time": {
+          "created": 1776562621157,
+          "completed": 1776562624645
+        },
+        "finish": "tool-calls",
+        "id": "msg_da3624ae50012pdESBIdKjFRQ2",
+        "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz"
+      },
+      "parts": [
+        {
+          "snapshot": "790cc4e208bbc24b481d538e4328182a202049bf",
+          "type": "step-start",
+          "id": "prt_da36255fc00167yRrvp0Xt8SRg",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da3624ae50012pdESBIdKjFRQ2"
+        },
+        {
+          "type": "tool",
+          "tool": "bash",
+          "callID": "toolu_bdrk_01Cg9UXPe2P3Zuxm1yPqweJS",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "cd /home/brian/mule_dev/R/entire-agent-zed && git log --oneline -3",
+              "description": "Verify commit"
+            },
+            "output": "64184a8 feat: overhaul lifecycle hooks, add branch extraction and test suite\nf97c3e1 fix: embed explicit PATH resolution in git hooks\n0f293e2 Initial release of entire-agent-zed-parser\n",
+            "metadata": {
+              "output": "64184a8 feat: overhaul lifecycle hooks, add branch extraction and test suite\nf97c3e1 fix: embed explicit PATH resolution in git hooks\n0f293e2 Initial release of entire-agent-zed-parser\n",
+              "exit": 0,
+              "description": "Verify commit",
+              "truncated": false
+            },
+            "title": "Verify commit",
+            "time": {
+              "start": 1776562624610,
+              "end": 1776562624612
+            }
+          },
+          "id": "prt_da36255fe0014L6TnJgcL1t473",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da3624ae50012pdESBIdKjFRQ2"
+        },
+        {
+          "reason": "tool-calls",
+          "snapshot": "790cc4e208bbc24b481d538e4328182a202049bf",
+          "type": "step-finish",
+          "tokens": {
+            "total": 102678,
+            "input": 1,
+            "output": 96,
+            "reasoning": 0,
+            "cache": {
+              "write": 470,
+              "read": 102111
+            }
+          },
+          "cost": 0,
+          "id": "prt_da36258640027DFUHhtibir11A",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da3624ae50012pdESBIdKjFRQ2"
+        }
+      ]
+    },
+    {
+      "info": {
+        "parentID": "msg_da361d089001eg7G03FDlYDeHW",
+        "role": "assistant",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/brian/mule_dev/R/entire-agent-zed",
+          "root": "/home/brian/mule_dev/R/entire-agent-zed"
+        },
+        "cost": 0,
+        "tokens": {
+          "total": 102777,
+          "input": 1,
+          "output": 32,
+          "reasoning": 0,
+          "cache": {
+            "write": 163,
+            "read": 102581
+          }
+        },
+        "modelID": "claude-opus-4.6",
+        "providerID": "github-copilot",
+        "time": {
+          "created": 1776562624651,
+          "completed": 1776562627847
+        },
+        "finish": "stop",
+        "id": "msg_da362588b001ohimmDfEcyHDmG",
+        "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz"
+      },
+      "parts": [
+        {
+          "snapshot": "790cc4e208bbc24b481d538e4328182a202049bf",
+          "type": "step-start",
+          "id": "prt_da3626323001jW4c9FV1rqajYw",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da362588b001ohimmDfEcyHDmG"
+        },
+        {
+          "type": "text",
+          "text": "Committed as `64184a8`. 4 files changed, 1,715 insertions, 57 deletions.",
+          "time": {
+            "start": 1776562627365,
+            "end": 1776562627812
+          },
+          "id": "prt_da3626325001b7lQDfys8tcqq6",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da362588b001ohimmDfEcyHDmG"
+        },
+        {
+          "reason": "stop",
+          "snapshot": "790cc4e208bbc24b481d538e4328182a202049bf",
+          "type": "step-finish",
+          "tokens": {
+            "total": 102777,
+            "input": 1,
+            "output": 32,
+            "reasoning": 0,
+            "cache": {
+              "write": 163,
+              "read": 102581
+            }
+          },
+          "cost": 0,
+          "id": "prt_da36264e5001YAzcR29V4kOYkD",
+          "sessionID": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+          "messageID": "msg_da362588b001ohimmDfEcyHDmG"
         }
       ]
     }
