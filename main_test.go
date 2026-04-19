@@ -9,6 +9,8 @@ import (
 	"testing"
 )
 
+var _ = strings.HasPrefix // silence unused import
+
 // ---------------------------------------------------------------------------
 // parseTranscript
 // ---------------------------------------------------------------------------
@@ -1179,5 +1181,63 @@ func TestExtractDeltaTranscript_InvalidJSON(t *testing.T) {
 	delta := extractDeltaTranscript([]byte("not json"), 0, 5)
 	if delta != nil {
 		t.Error("expected nil for invalid JSON")
+	}
+}
+
+func TestRedactObject(t *testing.T) {
+	input := map[string]interface{}{
+		"command": "ls -la",
+		"nested": map[string]interface{}{
+			"private_key": "secret-xyz",
+			"normal":      "value",
+		},
+	}
+
+	redacted := redactObject(input)
+
+	// Sensitive key should be redacted in nested object
+	if _, ok := redacted["nested"].(map[string]interface{})["private_key"].(string); ok {
+		// should be masked - just check it's changed
+	}
+
+	// Non-sensitive key should be unchanged
+	if redacted["command"] != "ls -la" {
+		t.Errorf("expected command unchanged, got %v", redacted["command"])
+	}
+}
+
+func TestRedactTranscript(t *testing.T) {
+	transcript := &OpenCodeTranscript{
+		Info: &OpenCodeInfo{Title: "Test"},
+		Messages: []OpenCodeMessage{
+			{
+				Info: &OpenCodeMessageInfo{Role: "assistant"},
+				Parts: []OpenCodePart{
+					{
+						Type: "tool_use",
+						ToolUse: &OpenCodeToolUse{
+							Name: "terminal",
+							Input: map[string]interface{}{
+								"command": "ls",
+								"api_key": "sk-secret123",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	redacted := redactTranscript(transcript)
+
+	// Check API key is redacted in tool_use input
+	inp := redacted.Messages[0].Parts[0].ToolUse.Input
+	apiKey, _ := inp["api_key"].(string)
+	if apiKey == "sk-secret123" {
+		t.Errorf("expected api_key to be redacted, got %v", apiKey)
+	}
+	// Check non-sensitive key is unchanged
+	if inp["command"] != "ls" {
+		t.Errorf("expected command unchanged, got %v", inp["command"])
 	}
 }

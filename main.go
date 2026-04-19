@@ -577,6 +577,99 @@ func saveSessionState(sessionID string, messageCount int) {
 	os.WriteFile(path, data, 0644)
 }
 
+var sensitiveKeys = []string{
+	"api_key", "apikey", "api-key",
+	"private_key", "privatekey", "private-key",
+	"secret", "secret_key", "secretkey", "secret-key",
+	"token", "access_token", "accesstoken", "access-token",
+	"password", "passwd", "pwd",
+	"credential", "credentials",
+	"auth", "authorization",
+	"key", "Key",
+}
+
+func isSensitiveKey(key string) bool {
+	keyLower := strings.ToLower(key)
+	for _, sensitive := range sensitiveKeys {
+		if strings.Contains(keyLower, sensitive) {
+			return true
+		}
+	}
+	return false
+}
+
+func redactValue(value string, maxChars int) string {
+	if len(value) <= maxChars {
+		return strings.Repeat("*", len(value))
+	}
+	return value[:maxChars] + strings.Repeat("*", len(value)-maxChars)
+}
+
+func redactObject(obj map[string]interface{}) map[string]interface{} {
+	if obj == nil {
+		return nil
+	}
+	result := make(map[string]interface{})
+	for k, v := range obj {
+		if isSensitiveKey(k) {
+			if str, ok := v.(string); ok {
+				result[k] = redactValue(str, 4)
+			} else {
+				result[k] = "[REDACTED]"
+			}
+		} else if nested, ok := v.(map[string]interface{}); ok {
+			result[k] = redactObject(nested)
+		} else if arr, ok := v.([]interface{}); ok {
+			var newArr []interface{}
+			for _, item := range arr {
+				if nestedItem, ok := item.(map[string]interface{}); ok {
+					newArr = append(newArr, redactObject(nestedItem))
+				} else {
+					newArr = append(newArr, item)
+				}
+			}
+			result[k] = newArr
+		} else {
+			result[k] = v
+		}
+	}
+	return result
+}
+
+func redactTranscript(transcript *OpenCodeTranscript) *OpenCodeTranscript {
+	if transcript == nil {
+		return nil
+	}
+	for _, msg := range transcript.Messages {
+		for _, part := range msg.Parts {
+			if part.ToolUse != nil && part.ToolUse.Input != nil {
+				redactedInput := redactObject(part.ToolUse.Input)
+				part.ToolUse.Input = redactedInput
+			}
+			if part.Result != nil && part.Result.Output != "" {
+				redacted := redactValue(part.Result.Output, 100)
+				if redacted != part.Result.Output {
+					part.Result.Output = redacted + " [TRUNCATED]"
+				}
+			}
+		}
+	}
+	return transcript
+}
+
+func redactTranscriptRaw(rawData []byte) []byte {
+	transcript, err := convertToOpenCodeFormat("", "", rawData)
+	if err != nil || transcript == nil {
+		return rawData
+	}
+	redacted := redactTranscript(transcript)
+	data, err := json.Marshal(redacted)
+	if err != nil {
+		return rawData
+	}
+	return data
+}
+
 func extractDeltaTranscript(rawData []byte, startIndex, endIndex int) *OpenCodeTranscript {
 	var zedData map[string]interface{}
 	if err := json.Unmarshal(rawData, &zedData); err != nil {
@@ -899,8 +992,10 @@ func handleParseHook() {
 			// Full transcript (first turn or no prior state)
 			transcriptForCheckpoint, _ = convertToOpenCodeFormat(threadID, sessionID, rawData)
 		}
-		if transcriptForCheckpoint != nil {
-			out["transcript"] = transcriptForCheckpoint
+		// Redact sensitive values before including in checkpoint
+		if tc, ok := transcriptForCheckpoint.(*OpenCodeTranscript); ok && tc != nil {
+			redactedTranscript := redactTranscript(tc)
+			out["transcript"] = redactedTranscript
 		}
 	}
 
