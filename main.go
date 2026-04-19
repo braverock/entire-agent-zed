@@ -35,6 +35,81 @@ type EntireMessage struct {
 	Tools   []EntireTool `json:"tools,omitempty"`
 }
 
+// OpenCodeInfo matches the info structure from OpenCode checkpoints
+type OpenCodeInfo struct {
+	ID         string           `json:"id"`
+	Slug       string           `json:"slug,omitempty"`
+	ProjectID  string           `json:"projectID,omitempty"`
+	Directory string           `json:"directory,omitempty"`
+	ParentID  string           `json:"parentID,omitempty"`
+	Title     string           `json:"title,omitempty"`
+	Version   string           `json:"version,omitempty"`
+	Summary   *OpenCodeSummary `json:"summary,omitempty"`
+	Model     *OpenCodeModel  `json:"model,omitempty"`
+}
+
+type OpenCodeSummary struct {
+	Additions int `json:"additions"`
+	Deletions int `json:"deletions"`
+	Files     int `json:"files"`
+}
+
+type OpenCodeModel struct {
+	ProviderID string `json:"providerID,omitempty"`
+	ModelID  string `json:"modelID,omitempty"`
+}
+
+type OpenCodeMessageInfo struct {
+	Role     string        `json:"role"`
+	Time     OpenCodeTime `json:"time"`
+	Tools   OpenCodeTools `json:"tools"`
+	Agent   string       `json:"agent,omitempty"`
+	Model   OpenCodeModel `json:"model,omitempty"`
+	ID       string       `json:"id,omitempty"`
+	SessionID string    `json:"sessionID,omitempty"`
+}
+
+type OpenCodeTime struct {
+	Created int64 `json:"created"`
+}
+
+type OpenCodeTools struct {
+	Task bool `json:"task"`
+}
+
+type OpenCodePart struct {
+	Type      string           `json:"type"`
+	Text     string           `json:"text,omitempty"`
+	ID       string           `json:"id,omitempty"`
+	MessageID string        `json:"messageID,omitempty"`
+	SessionID string        `json:"sessionID,omitempty"`
+	ToolUse *OpenCodeToolUse  `json:"tool_use,omitempty"`
+	Result  *OpenCodeToolResult `json:"result,omitempty"`
+}
+
+type OpenCodeToolUse struct {
+	Name            string                 `json:"name"`
+	ID              string                 `json:"id,omitempty"`
+	Input          map[string]interface{} `json:"input,omitempty"`
+	IsInputComplete bool                 `json:"is_input_complete,omitempty"`
+}
+
+type OpenCodeToolResult struct {
+	ID     string `json:"id"`
+	Output string `json:"output,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+type OpenCodeMessage struct {
+	Info  *OpenCodeMessageInfo `json:"info"`
+	Parts []OpenCodePart    `json:"parts"`
+}
+
+type OpenCodeTranscript struct {
+	Info     *OpenCodeInfo      `json:"info"`
+	Messages []OpenCodeMessage `json:"messages"`
+}
+
 type EntireTool struct {
 	Name   string                 `json:"name"`
 	Params map[string]interface{} `json:"params"`
@@ -304,6 +379,315 @@ func parseTranscript(rawData []byte) ([]EntireMessage, error) {
 	return transcript, nil
 }
 
+func convertToOpenCodeFormat(threadID, sessionID string, rawData []byte) (*OpenCodeTranscript, error) {
+	var zedData map[string]interface{}
+	if err := json.Unmarshal(rawData, &zedData); err != nil {
+		return nil, fmt.Errorf("failed to parse Zed thread: %w", err)
+	}
+
+	info := &OpenCodeInfo{
+		ID:         sessionID,
+		Directory: os.Getenv("ENTIRE_REPO_ROOT"),
+	}
+
+	if title, ok := zedData["title"].(string); ok {
+		info.Title = title
+	}
+	if version, ok := zedData["version"].(string); ok {
+		info.Version = version
+	}
+	if modelMap, ok := zedData["model"].(map[string]interface{}); ok {
+		provider, _ := modelMap["provider"].(string)
+		model, _ := modelMap["model"].(string)
+		info.Model = &OpenCodeModel{
+			ProviderID: provider,
+			ModelID:    model,
+		}
+	}
+
+	messagesRaw, _ := zedData["messages"].([]interface{})
+	var openCodeMessages []OpenCodeMessage
+
+	for _, mRaw := range messagesRaw {
+		msg, ok := mRaw.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if user, ok := msg["User"].(map[string]interface{}); ok {
+			msgInfo := &OpenCodeMessageInfo{
+				Role: "user",
+			}
+			if id, ok := user["id"].(string); ok {
+				msgInfo.ID = id
+			}
+
+			content, _ := user["content"].([]interface{})
+			parts := extractPartsFromContent(content)
+			openCodeMessages = append(openCodeMessages, OpenCodeMessage{
+				Info:  msgInfo,
+				Parts: parts,
+			})
+		}
+
+		if agent, ok := msg["Agent"].(map[string]interface{}); ok {
+			msgInfo := &OpenCodeMessageInfo{
+				Role: "assistant",
+			}
+			if id, ok := agent["id"].(string); ok {
+				msgInfo.ID = id
+			}
+
+			content, _ := agent["content"].([]interface{})
+			parts := extractPartsFromContent(content)
+
+			if toolResults, ok := agent["tool_results"].(map[string]interface{}); ok {
+				for toolID, trRaw := range toolResults {
+					tr, ok := trRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					var outputText string
+					if contentMap, ok := tr["content"].(map[string]interface{}); ok {
+						if text, ok := contentMap["Text"].(string); ok {
+							outputText = text
+						}
+					}
+					parts = append(parts, OpenCodePart{
+						Type: "tool_result",
+						ID:   toolID,
+						Result: &OpenCodeToolResult{
+							ID:     toolID,
+							Output: outputText,
+						},
+					})
+				}
+			}
+
+			openCodeMessages = append(openCodeMessages, OpenCodeMessage{
+				Info:  msgInfo,
+				Parts: parts,
+			})
+		}
+	}
+
+	return &OpenCodeTranscript{
+		Info:     info,
+		Messages: openCodeMessages,
+	}, nil
+}
+
+func extractPartsFromContent(contentRaw interface{}) []OpenCodePart {
+	content, ok := contentRaw.([]interface{})
+	if !ok {
+		return nil
+	}
+
+	var parts []OpenCodePart
+	for _, c := range content {
+		item, ok := c.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if text, ok := item["Text"].(string); ok && text != "" {
+			parts = append(parts, OpenCodePart{
+				Type: "text",
+				Text: text,
+			})
+		}
+		if mention, ok := item["Mention"].(map[string]interface{}); ok {
+			if text, ok := mention["content"].(string); ok && text != "" {
+				parts = append(parts, OpenCodePart{
+					Type: "text",
+					Text: text,
+				})
+			}
+		}
+		if toolUse, ok := item["ToolUse"].(map[string]interface{}); ok {
+			name, _ := toolUse["name"].(string)
+			id, _ := toolUse["id"].(string)
+			input, _ := toolUse["input"].(map[string]interface{})
+			isComplete, _ := toolUse["is_input_complete"].(bool)
+
+			parts = append(parts, OpenCodePart{
+				Type: "tool_use",
+				ToolUse: &OpenCodeToolUse{
+					Name:            name,
+					ID:              id,
+					Input:          input,
+					IsInputComplete: isComplete,
+				},
+			})
+		}
+	}
+	return parts
+}
+
+func sessionStateFile(sessionID string) string {
+	repoRoot := os.Getenv("ENTIRE_REPO_ROOT")
+	if repoRoot == "" {
+		out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+		if err != nil {
+			return ""
+		}
+		repoRoot = strings.TrimSpace(string(out))
+	}
+	return filepath.Join(repoRoot, ".git", "entire-sessions", sessionID+".state.json")
+}
+
+func loadSessionState(sessionID string) int {
+	path := sessionStateFile(sessionID)
+	if path == "" {
+		return 0
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	var state struct {
+		MessageCount int `json:"message_count"`
+	}
+	if err := json.Unmarshal(data, &state); err != nil {
+		return 0
+	}
+	return state.MessageCount
+}
+
+func saveSessionState(sessionID string, messageCount int) {
+	path := sessionStateFile(sessionID)
+	if path == "" {
+		return
+	}
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return
+	}
+	state := struct {
+		MessageCount int    `json:"message_count"`
+		UpdatedAt    string `json:"updated_at"`
+	}{
+		MessageCount: messageCount,
+		UpdatedAt:    time.Now().Format(time.RFC3339),
+	}
+	data, err := json.MarshalIndent(state, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(path, data, 0644)
+}
+
+func extractDeltaTranscript(rawData []byte, startIndex, endIndex int) *OpenCodeTranscript {
+	var zedData map[string]interface{}
+	if err := json.Unmarshal(rawData, &zedData); err != nil {
+		return nil
+	}
+
+	messagesRaw, ok := zedData["messages"].([]interface{})
+	if !ok || len(messagesRaw) == 0 {
+		return nil
+	}
+
+	// Clamp indices to valid range
+	if startIndex < 0 {
+		startIndex = 0
+	}
+	if endIndex > len(messagesRaw) {
+		endIndex = len(messagesRaw)
+	}
+	if startIndex >= endIndex {
+		return nil
+	}
+
+	var openCodeMessages []OpenCodeMessage
+
+	for i := startIndex; i < endIndex; i++ {
+		msg, ok := messagesRaw[i].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if user, ok := msg["User"].(map[string]interface{}); ok {
+			msgInfo := &OpenCodeMessageInfo{
+				Role: "user",
+			}
+			if id, ok := user["id"].(string); ok {
+				msgInfo.ID = id
+			}
+
+			content, _ := user["content"].([]interface{})
+			parts := extractPartsFromContent(content)
+			openCodeMessages = append(openCodeMessages, OpenCodeMessage{
+				Info:  msgInfo,
+				Parts: parts,
+			})
+		}
+
+		if agent, ok := msg["Agent"].(map[string]interface{}); ok {
+			msgInfo := &OpenCodeMessageInfo{
+				Role: "assistant",
+			}
+			if id, ok := agent["id"].(string); ok {
+				msgInfo.ID = id
+			}
+
+			content, _ := agent["content"].([]interface{})
+			parts := extractPartsFromContent(content)
+
+			if toolResults, ok := agent["tool_results"].(map[string]interface{}); ok {
+				for toolID, trRaw := range toolResults {
+					tr, ok := trRaw.(map[string]interface{})
+					if !ok {
+						continue
+					}
+					var outputText string
+					if contentMap, ok := tr["content"].(map[string]interface{}); ok {
+						if text, ok := contentMap["Text"].(string); ok {
+							outputText = text
+						}
+					}
+					parts = append(parts, OpenCodePart{
+						Type: "tool_result",
+						ID:   toolID,
+						Result: &OpenCodeToolResult{
+							ID:     toolID,
+							Output: outputText,
+						},
+					})
+				}
+			}
+
+			openCodeMessages = append(openCodeMessages, OpenCodeMessage{
+				Info:  msgInfo,
+				Parts: parts,
+			})
+		}
+	}
+
+	info := &OpenCodeInfo{
+		Directory: os.Getenv("ENTIRE_REPO_ROOT"),
+	}
+	if title, ok := zedData["title"].(string); ok {
+		info.Title = title
+	}
+	if version, ok := zedData["version"].(string); ok {
+		info.Version = version
+	}
+	if modelMap, ok := zedData["model"].(map[string]interface{}); ok {
+		provider, _ := modelMap["provider"].(string)
+		model, _ := modelMap["model"].(string)
+		info.Model = &OpenCodeModel{
+			ProviderID: provider,
+			ModelID:    model,
+		}
+	}
+
+	return &OpenCodeTranscript{
+		Info:     info,
+		Messages: openCodeMessages,
+	}
+}
+
 func handleTranscript() {
 	dbPath, err := getZedDBPath()
 	if err != nil {
@@ -480,15 +864,43 @@ func handleParseHook() {
 		}
 	}
 
-	// Include message count as a watermark for delta calculations
+	// Delta tracking: store/read message count watermark
+	var startMsgCount int
+	if eventType == 2 || eventType == 1 {
+		// At turn-start or session-start: store current message count as watermark
+		startMsgCount = msgCount
+		saveSessionState(sessionID, msgCount)
+	} else {
+		// At turn-end or session-end: load watermark and compute delta
+		startMsgCount = loadSessionState(sessionID)
+	}
+
+	// Report current message count and watermark
 	if msgCount > 0 {
 		out["message_count"] = msgCount
+	}
+	if startMsgCount > 0 {
+		out["transcript_start"] = startMsgCount
+		out["transcript_delta"] = msgCount - startMsgCount
 	}
 
 	// Include token usage on turn-end and session-end events
 	if (eventType == 3 || eventType == 5) && rawData != nil {
 		if tokens := extractTokens(rawData); tokens != nil {
 			out["tokens"] = tokens
+		}
+
+		// Delta: only include NEW messages since last turn-start
+		var transcriptForCheckpoint interface{}
+		if startMsgCount > 0 && startMsgCount < msgCount {
+			// Delta mode: extract only new messages
+			transcriptForCheckpoint = extractDeltaTranscript(rawData, startMsgCount, msgCount)
+		} else {
+			// Full transcript (first turn or no prior state)
+			transcriptForCheckpoint, _ = convertToOpenCodeFormat(threadID, sessionID, rawData)
+		}
+		if transcriptForCheckpoint != nil {
+			out["transcript"] = transcriptForCheckpoint
 		}
 	}
 

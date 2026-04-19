@@ -958,3 +958,226 @@ func TestWriteSessionSnapshot_OverwritesOnUpdate(t *testing.T) {
 		t.Errorf("expected 2 messages after update, got %d", len(transcript))
 	}
 }
+
+// ---------------------------------------------------------------------------
+// convertToOpenCodeFormat
+// ---------------------------------------------------------------------------
+
+func TestConvertToOpenCodeFormat_Basic(t *testing.T) {
+	raw := `{
+		"version": "0.3.0",
+		"title": "Test Session",
+		"model": {"provider": "google", "model": "gemini-2.0-flash"},
+		"messages": [
+			{"User": {"id": "u1", "content": [{"Text": "Hello"}]}},
+			{"Agent": {"id": "a1", "content": [{"Text": "Hi there"}]}}
+		]
+	}`
+
+	transcript, err := convertToOpenCodeFormat("thread-123", "ses-abc", []byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if transcript.Info == nil {
+		t.Fatal("expected info section")
+	}
+	if transcript.Info.Title != "Test Session" {
+		t.Errorf("expected title=Test Session, got %q", transcript.Info.Title)
+	}
+	if transcript.Info.Version != "0.3.0" {
+		t.Errorf("expected version=0.3.0, got %q", transcript.Info.Version)
+	}
+	if transcript.Info.Model == nil {
+		t.Fatal("expected model section")
+	}
+	if transcript.Info.Model.ProviderID != "google" {
+		t.Errorf("expected provider=google, got %q", transcript.Info.Model.ProviderID)
+	}
+	if transcript.Info.Model.ModelID != "gemini-2.0-flash" {
+		t.Errorf("expected modelID=gemini-2.0-flash, got %q", transcript.Info.Model.ModelID)
+	}
+
+	if len(transcript.Messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(transcript.Messages))
+	}
+	if transcript.Messages[0].Info.Role != "user" {
+		t.Errorf("expected first message role=user, got %q", transcript.Messages[0].Info.Role)
+	}
+	if transcript.Messages[1].Info.Role != "assistant" {
+		t.Errorf("expected second message role=assistant, got %q", transcript.Messages[1].Info.Role)
+	}
+
+	// Check text parts
+	if len(transcript.Messages[0].Parts) != 1 {
+		t.Errorf("expected 1 part in user message, got %d", len(transcript.Messages[0].Parts))
+	}
+	if transcript.Messages[0].Parts[0].Type != "text" {
+		t.Errorf("expected type=text, got %q", transcript.Messages[0].Parts[0].Type)
+	}
+	if transcript.Messages[0].Parts[0].Text != "Hello" {
+		t.Errorf("expected text=Hello, got %q", transcript.Messages[0].Parts[0].Text)
+	}
+}
+
+func TestConvertToOpenCodeFormat_ToolUse(t *testing.T) {
+	raw := `{
+		"messages": [
+			{"Agent": {"id": "a1", "content": [
+				{"Text": "Let me read that file."},
+				{"ToolUse": {"id": "read-1", "name": "read_file", "input": {"path": "/tmp/foo.txt"}, "is_input_complete": true}}
+			]}}
+		]
+	}`
+
+	transcript, err := convertToOpenCodeFormat("thread-123", "ses-abc", []byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(transcript.Messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(transcript.Messages))
+	}
+	msg := transcript.Messages[0]
+
+	// Should have 2 parts: text and tool_use
+	if len(msg.Parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(msg.Parts))
+	}
+	if msg.Parts[0].Type != "text" {
+		t.Errorf("expected first part type=text, got %q", msg.Parts[0].Type)
+	}
+	if msg.Parts[1].Type != "tool_use" {
+		t.Errorf("expected second part type=tool_use, got %q", msg.Parts[1].Type)
+	}
+	if msg.Parts[1].ToolUse == nil {
+		t.Fatal("expected tool_use data")
+	}
+	if msg.Parts[1].ToolUse.Name != "read_file" {
+		t.Errorf("expected tool name=read_file, got %q", msg.Parts[1].ToolUse.Name)
+	}
+	if msg.Parts[1].ToolUse.ID != "read-1" {
+		t.Errorf("expected tool id=read-1, got %q", msg.Parts[1].ToolUse.ID)
+	}
+	if msg.Parts[1].ToolUse.Input["path"] != "/tmp/foo.txt" {
+		t.Errorf("expected path=/tmp/foo.txt, got %v", msg.Parts[1].ToolUse.Input["path"])
+	}
+	if !msg.Parts[1].ToolUse.IsInputComplete {
+		t.Error("expected is_input_complete=true")
+	}
+}
+
+func TestConvertToOpenCodeFormat_Mention(t *testing.T) {
+	raw := `{
+		"messages": [
+			{"User": {"content": [
+				{"Text": "Look at "},
+				{"Mention": {"content": "src/main.go"}}
+			]}}
+		]
+	}`
+
+	transcript, err := convertToOpenCodeFormat("thread-123", "ses-abc", []byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Mentions are converted to text parts
+	if len(transcript.Messages[0].Parts) != 2 {
+		t.Fatalf("expected 2 parts, got %d", len(transcript.Messages[0].Parts))
+	}
+	if transcript.Messages[0].Parts[1].Type != "text" {
+		t.Errorf("expected type=text, got %q", transcript.Messages[0].Parts[1].Type)
+	}
+	if transcript.Messages[0].Parts[1].Text != "src/main.go" {
+		t.Errorf("expected text, got %q", transcript.Messages[0].Parts[1].Text)
+	}
+}
+
+func TestConvertToOpenCodeFormat_EmptyMessages(t *testing.T) {
+	raw := `{"messages": []}`
+
+	transcript, err := convertToOpenCodeFormat("thread-123", "ses-abc", []byte(raw))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(transcript.Messages) != 0 {
+		t.Errorf("expected 0 messages, got %d", len(transcript.Messages))
+	}
+}
+
+func TestConvertToOpenCodeFormat_InvalidJSON(t *testing.T) {
+	_, err := convertToOpenCodeFormat("thread-123", "ses-abc", []byte("not json"))
+	if err == nil {
+		t.Error("expected error for invalid JSON")
+	}
+}
+
+func TestExtractDeltaTranscript(t *testing.T) {
+	raw := `{
+		"version": "0.3.0",
+		"title": "Test",
+		"messages": [
+			{"User": {"id": "u1", "content": [{"Text": "First user msg"}]}},
+			{"Agent": {"id": "a1", "content": [{"Text": "First agent response"}]}},
+			{"User": {"id": "u2", "content": [{"Text": "Second user msg"}]}},
+			{"Agent": {"id": "a2", "content": [{"Text": "Second agent response"}]}},
+			{"User": {"id": "u3", "content": [{"Text": "Third user msg"}]}},
+			{"Agent": {"id": "a3", "content": [{"Text": "Third agent response"}]}}
+		]
+	}`
+
+	// Extract delta from index 2 to 4 (messages 3-4: second user + second agent)
+	delta := extractDeltaTranscript([]byte(raw), 2, 4)
+	if delta == nil {
+		t.Fatal("expected delta transcript")
+	}
+
+	// Should have 2 messages (user + agent)
+	if len(delta.Messages) != 2 {
+		t.Fatalf("expected 2 messages in delta, got %d", len(delta.Messages))
+	}
+
+	if delta.Messages[0].Info.Role != "user" {
+		t.Errorf("expected first delta msg role=user, got %q", delta.Messages[0].Info.Role)
+	}
+	if delta.Messages[0].Parts[0].Text != "Second user msg" {
+		t.Errorf("expected 'Second user msg', got %q", delta.Messages[0].Parts[0].Text)
+	}
+
+	if delta.Messages[1].Info.Role != "assistant" {
+		t.Errorf("expected second delta msg role=assistant, got %q", delta.Messages[1].Info.Role)
+	}
+	if delta.Messages[1].Parts[0].Text != "Second agent response" {
+		t.Errorf("expected 'Second agent response', got %q", delta.Messages[1].Parts[0].Text)
+	}
+
+	// Verify info is preserved
+	if delta.Info.Title != "Test" {
+		t.Errorf("expected title=Test, got %q", delta.Info.Title)
+	}
+}
+
+func TestExtractDeltaTranscript_OutOfBounds(t *testing.T) {
+	raw := `{
+		"messages": [
+			{"User": {"content": [{"Text": "Only one"}]}}
+		]
+	}`
+
+	// Request delta beyond actual messages
+	delta := extractDeltaTranscript([]byte(raw), 0, 10)
+	if delta == nil {
+		t.Fatal("expected delta even with clamped bounds")
+	}
+	if len(delta.Messages) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(delta.Messages))
+	}
+}
+
+func TestExtractDeltaTranscript_InvalidJSON(t *testing.T) {
+	delta := extractDeltaTranscript([]byte("not json"), 0, 5)
+	if delta != nil {
+		t.Error("expected nil for invalid JSON")
+	}
+}

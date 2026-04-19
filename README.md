@@ -10,7 +10,40 @@ This agent operates as a **Database Tailer**:
 1. When called, it locates the Zed database.
 2. It queries the database for the most recently modified chat thread matching the current `ENTIRE_REPO_ROOT` environment variable.
 3. It decompresses the `zstd` blob and parses the internal Zed JSON format (`User`, `Agent`, `ToolUse`).
-4. It maps the chat into the standard Entire Transcript Schema and outputs it as JSON.
+4. It transforms the chat into the **OpenCode Transcript Format** for efficient checkpoint storage.
+
+## Transcript Format
+
+The transcript is now stored in **OpenCode format**, which is significantly more efficient than the previous Zed SQLite database snapshots:
+
+```json
+{
+  "info": {
+    "id": "session-id",
+    "title": "Thread title",
+    "version": "0.3.0",
+    "model": { "providerID": "google", "modelID": "gemini-3.1-pro-preview" }
+  },
+  "messages": [
+    {
+      "info": { "role": "user", "id": "msg-..." },
+      "parts": [
+        { "type": "text", "text": "Hello" },
+        { "type": "tool_use", "tool_use": { "name": "terminal", "input": {...} } }
+      ]
+    }
+  ]
+}
+```
+
+### Delta Tracking
+
+The agent tracks message count watermarks between turns to enable **delta-only transcripts**:
+
+- **turn-start**: Stores current message count as watermark in `.git/entire-sessions/<session-id>.state.json`
+- **turn-end**: Loads watermark, returns only new messages since last turn-start
+
+This dramatically reduces checkpoint sizes. Instead of storing ~10 MB per checkpoint (full SQLite database), we now store only the new messages (~1-50 KB per turn).
 
 ### Database Locations
 
@@ -198,7 +231,7 @@ This agent currently exposes a limitation in `entire` v0.5.5 where external agen
 ## Building and Installing
 
 ```bash
-make test      # Run all tests (43 tests)
+make test      # Run all tests (57 tests)
 make install   # Build and install to ~/.local/bin/entire-agent-zed
 make uninstall # Remove from ~/.local/bin
 make clean     # Remove local build artifact
@@ -209,3 +242,13 @@ The standard workflow after making changes:
 ```bash
 make test && make install
 ```
+
+## Changelog
+
+### 2025-04-19 - Delta Transcript Storage
+
+- Added OpenCode transcript format conversion (`convertToOpenCodeFormat()`)
+- Added delta tracking with message count watermarks (`extractDeltaTranscript()`)
+- Added session state storage (`.git/entire-sessions/<session-id>.state.json`)
+- Reduced checkpoint sizes from ~10 MB to ~1-50 KB per turn
+- Added 9 new tests for format conversion and delta extraction
