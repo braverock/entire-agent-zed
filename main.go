@@ -56,13 +56,15 @@ type TimelineEntry struct {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: entire-agent-zed-parser <subcommand>")
+		printHelp()
 		os.Exit(1)
 	}
 
 	subcommand := os.Args[1]
 
 	switch subcommand {
+	case "help", "--help", "-h":
+		printHelp()
 	case "info":
 		handleInfo()
 	case "transcript":
@@ -89,11 +91,70 @@ func main() {
 		handleAttach()
 	case "extract-branch":
 		handleExtractBranch()
+	case "end-session":
+		handleEndSession()
 	default:
 		// Required by the Entire External Agent Protocol: Exit gracefully if unsupported
 		fmt.Println("{}")
 		os.Exit(0)
 	}
+}
+
+func printHelp() {
+	fmt.Print(`entire-agent-zed — Entire External Agent plugin for Zed Editor
+
+Usage: entire-agent-zed <command> [options]
+
+Hook management:
+  install-hooks          Install post-commit git hooks for automatic lifecycle tracking
+                         Hooks fire: session-start → turn-start on first commit,
+                         then turn-end → turn-start on each subsequent commit.
+                         Migrates legacy pre-commit hooks automatically.
+                         Uses $ENTIRE_REPO_ROOT or auto-detects via git.
+
+  uninstall-hooks        Remove installed git hooks (both post-commit and legacy pre-commit)
+
+  are-hooks-installed    Check whether hooks are installed (exits with JSON: {"installed": true/false})
+
+User commands:
+  attach                 Capture a research/planning thread that has no commits.
+                         Fires the full lifecycle in one shot:
+                         session-start → turn-start → turn-end → session-end.
+                         Also writes a session snapshot for cross-agent handoff.
+
+  end-session            Manually end the current Zed session.
+                         Fires turn-end → session-end and writes a session snapshot.
+
+  extract-branch         Extract all Zed transcripts correlated with branch commits.
+                         Matches threads to commits by timestamp (±30min window).
+                         Reports deduplicated token usage per-thread and branch totals.
+    --branch <name>        Branch to extract (default: current)
+    --base <name>          Base branch for merge-base (default: main)
+    --format json|markdown Output format (default: json)
+
+  transcript             Extract the latest Zed thread transcript as JSON.
+                         Filters by $ENTIRE_REPO_ROOT if set.
+
+  calculate-tokens       Report cumulative token usage for the latest thread.
+
+Protocol commands (called by the Entire CLI — not typically run directly):
+  info                   Print agent capabilities as JSON
+  parse-hook <hook>      Parse a lifecycle hook event. Reads JSON payload from stdin.
+                         Valid hooks: session-start, turn-start, turn-end, session-end
+                         On turn-end/session-end: includes token snapshot and writes
+                         session file to .git/entire-sessions/ for handoff.
+  start                  No-op start signal (protocol requirement)
+  stop                   No-op stop signal (protocol requirement)
+  get-session-dir        Print the Zed threads directory path
+  resolve-session-file   Print the Zed threads database path
+
+  help, --help, -h       Print this help message
+
+Environment:
+  ENTIRE_REPO_ROOT       Git repo root (auto-detected if unset)
+  Zed DB location        Linux:  ~/.local/share/zed/threads/threads.db
+                         macOS:  ~/Library/Application Support/Zed/threads/threads.db
+`)
 }
 
 func handleInfo() {
@@ -431,14 +492,77 @@ func handleParseHook() {
 		}
 	}
 
+	// Write transcript snapshot on turn-end and session-end for session-handoff skill
+	if eventType == 3 || eventType == 5 {
+		phase := "active"
+		if eventType == 5 {
+			phase = "ended"
+		}
+		writeSessionSnapshot(sessionID, threadID, lastUserMsg, phase, rawData)
+	}
+
 	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+// writeSessionSnapshot writes a session JSON file and transcript to
+// .git/entire-sessions/ so that the session-handoff skill can find and
+// read Zed transcripts for cross-agent handoff.
+func writeSessionSnapshot(sessionID, threadID, lastPrompt, phase string, rawData []byte) {
+	repoRoot := os.Getenv("ENTIRE_REPO_ROOT")
+	if repoRoot == "" {
+		out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+		if err != nil {
+			return // not in a git repo
+		}
+		repoRoot = strings.TrimSpace(string(out))
+	}
+
+	sessionsDir := filepath.Join(repoRoot, ".git", "entire-sessions")
+	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+		return
+	}
+
+	// Write the transcript file (the raw Entire-format messages)
+	transcriptPath := filepath.Join(sessionsDir, sessionID+".transcript.json")
+	if rawData != nil {
+		transcript, err := parseTranscript(rawData)
+		if err == nil && len(transcript) > 0 {
+			data, err := json.MarshalIndent(transcript, "", "  ")
+			if err == nil {
+				os.WriteFile(transcriptPath, data, 0644)
+			}
+		}
+	}
+
+	// Write the session metadata JSON (what session-handoff reads first)
+	now := time.Now().Format(time.RFC3339)
+	sessionMeta := map[string]interface{}{
+		"session_id":          sessionID,
+		"agent_type":          "Zed",
+		"phase":               phase,
+		"started_at":          now,
+		"last_interaction_time": now,
+		"transcript_path":     transcriptPath,
+	}
+	if lastPrompt != "" {
+		sessionMeta["last_prompt"] = lastPrompt
+	}
+	if threadID != "" {
+		sessionMeta["thread_id"] = threadID
+	}
+
+	metaData, err := json.MarshalIndent(sessionMeta, "", "  ")
+	if err != nil {
+		return
+	}
+	os.WriteFile(filepath.Join(sessionsDir, sessionID+".json"), metaData, 0644)
 }
 
 // handleAttach captures a research/planning thread that doesn't produce commits.
 // It fires the full lifecycle: session-start → turn-start → turn-end → session-end
 // in a single invocation, using the Entire CLI.
 func handleAttach() {
-	threadID, lastUserMsg, msgCount, _ := getLatestThreadMeta()
+	threadID, lastUserMsg, msgCount, rawData := getLatestThreadMeta()
 
 	if threadID == "" {
 		fmt.Fprintf(os.Stderr, "Error: no Zed thread found for this repository\n")
@@ -465,11 +589,51 @@ func handleAttach() {
 	// Fire session-end
 	runEntireHook(entireCmd, "session-end", sessionID)
 
+	// Write session snapshot for cross-agent handoff
+	writeSessionSnapshot(sessionID, threadID, lastUserMsg, "ended", rawData)
+
 	summary := map[string]interface{}{
 		"status":        "attached",
 		"session_id":    sessionID,
 		"thread_id":     threadID,
 		"message_count": msgCount,
+	}
+	if lastUserMsg != "" {
+		summary["last_prompt"] = lastUserMsg
+	}
+
+	out, _ := json.MarshalIndent(summary, "", "  ")
+	fmt.Printf("%s\n", out)
+}
+
+// handleEndSession manually ends the current Zed session from the command line.
+// Fires turn-end → session-end via the Entire CLI and writes a session snapshot.
+func handleEndSession() {
+	threadID, lastUserMsg, _, rawData := getLatestThreadMeta()
+
+	if threadID == "" {
+		fmt.Fprintf(os.Stderr, "Error: no Zed thread found for this repository\n")
+		os.Exit(1)
+	}
+
+	sessionID := "zed-" + threadID
+
+	entireCmd := "entire"
+	if _, err := exec.LookPath("entire-patched"); err == nil {
+		entireCmd = "entire-patched"
+	}
+
+	// End the current turn, then end the session
+	runEntireHook(entireCmd, "turn-end", sessionID)
+	runEntireHook(entireCmd, "session-end", sessionID)
+
+	// Write session snapshot for cross-agent handoff
+	writeSessionSnapshot(sessionID, threadID, lastUserMsg, "ended", rawData)
+
+	summary := map[string]interface{}{
+		"status":     "ended",
+		"session_id": sessionID,
+		"thread_id":  threadID,
 	}
 	if lastUserMsg != "" {
 		summary["last_prompt"] = lastUserMsg

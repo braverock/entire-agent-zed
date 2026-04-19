@@ -849,3 +849,112 @@ func TestBinary_UninstallHooks_FallsBackToGitRoot(t *testing.T) {
 		t.Error("expected installed=false after uninstall via git root fallback")
 	}
 }
+
+// ---------------------------------------------------------------------------
+// writeSessionSnapshot
+// ---------------------------------------------------------------------------
+
+func TestWriteSessionSnapshot_CreatesFiles(t *testing.T) {
+	repo := setupTempRepo(t)
+	t.Setenv("ENTIRE_REPO_ROOT", repo)
+
+	rawData := []byte(`{
+		"messages": [
+			{"User": {"content": [{"Text": "Hello"}]}},
+			{"Agent": {"content": [{"Text": "Hi there"}]}}
+		]
+	}`)
+
+	writeSessionSnapshot("zed-abc123", "abc123", "Hello", "active", rawData)
+
+	// Check session metadata file
+	metaPath := filepath.Join(repo, ".git", "entire-sessions", "zed-abc123.json")
+	metaBytes, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("session metadata file not created: %v", err)
+	}
+
+	var meta map[string]interface{}
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
+		t.Fatalf("invalid session metadata JSON: %v", err)
+	}
+	if meta["session_id"] != "zed-abc123" {
+		t.Errorf("expected session_id=zed-abc123, got %v", meta["session_id"])
+	}
+	if meta["agent_type"] != "Zed" {
+		t.Errorf("expected agent_type=Zed, got %v", meta["agent_type"])
+	}
+	if meta["phase"] != "active" {
+		t.Errorf("expected phase=active, got %v", meta["phase"])
+	}
+	if meta["last_prompt"] != "Hello" {
+		t.Errorf("expected last_prompt=Hello, got %v", meta["last_prompt"])
+	}
+	if meta["thread_id"] != "abc123" {
+		t.Errorf("expected thread_id=abc123, got %v", meta["thread_id"])
+	}
+
+	// Check transcript_path points to a real file
+	transcriptPath, ok := meta["transcript_path"].(string)
+	if !ok || transcriptPath == "" {
+		t.Fatal("expected non-empty transcript_path")
+	}
+	transcriptBytes, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatalf("transcript file not created at %s: %v", transcriptPath, err)
+	}
+
+	var transcript []EntireMessage
+	if err := json.Unmarshal(transcriptBytes, &transcript); err != nil {
+		t.Fatalf("invalid transcript JSON: %v", err)
+	}
+	if len(transcript) != 2 {
+		t.Errorf("expected 2 messages in transcript, got %d", len(transcript))
+	}
+}
+
+func TestWriteSessionSnapshot_NilRawData(t *testing.T) {
+	repo := setupTempRepo(t)
+	t.Setenv("ENTIRE_REPO_ROOT", repo)
+
+	writeSessionSnapshot("zed-nodata", "nodata", "", "ended", nil)
+
+	// Session metadata should still be created
+	metaPath := filepath.Join(repo, ".git", "entire-sessions", "zed-nodata.json")
+	metaBytes, err := os.ReadFile(metaPath)
+	if err != nil {
+		t.Fatalf("session metadata file not created: %v", err)
+	}
+
+	var meta map[string]interface{}
+	json.Unmarshal(metaBytes, &meta)
+	if meta["phase"] != "ended" {
+		t.Errorf("expected phase=ended, got %v", meta["phase"])
+	}
+
+	// Transcript file should NOT exist (no raw data)
+	transcriptPath := filepath.Join(repo, ".git", "entire-sessions", "zed-nodata.transcript.json")
+	if _, err := os.Stat(transcriptPath); err == nil {
+		t.Error("transcript file should not exist when rawData is nil")
+	}
+}
+
+func TestWriteSessionSnapshot_OverwritesOnUpdate(t *testing.T) {
+	repo := setupTempRepo(t)
+	t.Setenv("ENTIRE_REPO_ROOT", repo)
+
+	rawData1 := []byte(`{"messages": [{"User": {"content": [{"Text": "First"}]}}]}`)
+	rawData2 := []byte(`{"messages": [{"User": {"content": [{"Text": "First"}]}}, {"Agent": {"content": [{"Text": "Reply"}]}}]}`)
+
+	writeSessionSnapshot("zed-update", "update", "First", "active", rawData1)
+	writeSessionSnapshot("zed-update", "update", "First", "active", rawData2)
+
+	transcriptPath := filepath.Join(repo, ".git", "entire-sessions", "zed-update.transcript.json")
+	transcriptBytes, _ := os.ReadFile(transcriptPath)
+
+	var transcript []EntireMessage
+	json.Unmarshal(transcriptBytes, &transcript)
+	if len(transcript) != 2 {
+		t.Errorf("expected 2 messages after update, got %d", len(transcript))
+	}
+}

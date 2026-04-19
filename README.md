@@ -38,6 +38,7 @@ This agent operates as a **Database Tailer**:
 | `are-hooks-installed` | Checks if the hook is installed |
 | `calculate-tokens` | Sums token usage from the latest thread |
 | `attach` | Captures a research/planning thread that doesn't produce commits |
+| `end-session` | Manually ends the current Zed session from the command line |
 | `extract-branch` | Correlates Zed transcripts with the branch commit history |
 | `get-session-dir` | Returns the directory containing Zed's threads.db |
 | `resolve-session-file` | Returns the full path to threads.db |
@@ -72,6 +73,25 @@ entire-agent-zed attach
 ```
 
 This fires the full lifecycle (session-start → turn-start → turn-end → session-end) in a single invocation, capturing the entire thread as one turn.
+
+## Ending a Session Manually
+
+To end the current Zed session from the command line:
+
+```bash
+entire-agent-zed end-session
+```
+
+This fires `turn-end` → `session-end`, writes a session snapshot for cross-agent handoff, and prints a JSON confirmation. No stdin required.
+
+## Cross-Agent Session Handoff
+
+On every `turn-end`, `session-end`, `attach`, and `end-session`, the agent writes a session snapshot to `.git/entire-sessions/`:
+
+- **`<session-id>.json`** — Session metadata (`session_id`, `agent_type`, `phase`, `transcript_path`, `last_prompt`, etc.)
+- **`<session-id>.transcript.json`** — The full transcript in Entire message format
+
+This enables the [session-handoff skill](https://github.com/entireio/skills) to pick up Zed sessions from other agents (Claude Code, Codex, Cursor, etc.) without any special configuration.
 
 ## Branch Timeline Extraction
 
@@ -178,7 +198,7 @@ This agent currently exposes a limitation in `entire` v0.5.5 where external agen
 ## Building and Installing
 
 ```bash
-make test      # Run all tests (40 tests)
+make test      # Run all tests (43 tests)
 make install   # Build and install to ~/.local/bin/entire-agent-zed
 make uninstall # Remove from ~/.local/bin
 make clean     # Remove local build artifact
