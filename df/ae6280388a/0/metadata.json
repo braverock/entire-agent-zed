@@ -1,0 +1,110 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "dfae6280388a",
+  "session_id": "ses_25cbd2319ffeQT9oxy5ymqHTOz",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-19T02:19:50.746017223Z",
+  "branch": "master",
+  "checkpoints_count": 7,
+  "files_touched": [
+    "main.go",
+    "main_test.go"
+  ],
+  "agent": "OpenCode",
+  "model": "claude-opus-4.6",
+  "turn_id": "15573cf241ed",
+  "checkpoint_transcript_start": 130,
+  "transcript_lines_at_start": 130,
+  "token_usage": {
+    "input_tokens": 77,
+    "cache_creation_tokens": 381244,
+    "cache_read_tokens": 2663853,
+    "output_tokens": 15315,
+    "api_call_count": 56
+  },
+  "session_metrics": {
+    "turn_count": 18
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-19T02:19:50.702136392Z",
+    "agent_lines": 275,
+    "agent_removed": 2,
+    "human_added": 21,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 296,
+    "total_lines_changed": 299,
+    "agent_percentage": 92.64214046822742,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 661,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/agents/entire-search.md": 25,
+        ".claude/settings.json": 84,
+        ".codex/agents/entire-search.toml": 23,
+        ".codex/config.toml": 3,
+        ".codex/hooks.json": 40,
+        ".cursor/hooks.json": 40,
+        ".gemini/agents/entire-search.md": 28,
+        ".gemini/settings.json": 141,
+        ".github/hooks/entire.json": 61,
+        ".opencode/plugins/entire.ts": 216
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 837,
+      "agent_lines_removed": 1
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 871,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 4,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 871,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 5,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 894,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 6,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 894,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 7,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 894,
+      "agent_lines_removed": 2
+    },
+    {
+      "checkpoint_number": 8,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 936,
+      "agent_lines_removed": 2
+    }
+  ]
+}
