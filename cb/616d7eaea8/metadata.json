@@ -1,8 +1,7 @@
 {
-  "cli_version": "0.5.5",
+  "cli_version": "dev",
   "checkpoint_id": "cb616d7eaea8",
   "strategy": "manual-commit",
-  "branch": "master",
   "checkpoints_count": 0,
   "files_touched": null,
   "sessions": [
@@ -17,6 +16,12 @@
       "transcript": "/cb/616d7eaea8/1/full.jsonl",
       "content_hash": "/cb/616d7eaea8/1/content_hash.txt",
       "prompt": "/cb/616d7eaea8/1/prompt.txt"
+    },
+    {
+      "metadata": "/cb/616d7eaea8/2/metadata.json",
+      "transcript": "/cb/616d7eaea8/2/full.jsonl",
+      "content_hash": "/cb/616d7eaea8/2/content_hash.txt",
+      "prompt": ""
     }
   ],
   "token_usage": {
