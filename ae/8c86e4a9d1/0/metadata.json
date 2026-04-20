@@ -1,0 +1,72 @@
+{
+  "cli_version": "0.5.5",
+  "checkpoint_id": "ae8c86e4a9d1",
+  "session_id": "c2c097fb-b1b8-4272-9849-43d7e40da2b8",
+  "strategy": "manual-commit",
+  "created_at": "2026-04-20T11:38:47.765732559Z",
+  "branch": "master",
+  "checkpoints_count": 2,
+  "files_touched": [
+    "README.md"
+  ],
+  "agent": "Gemini CLI",
+  "model": "gemini-3-flash-preview",
+  "turn_id": "badca1513540",
+  "token_usage": {
+    "input_tokens": 796372,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 523888,
+    "output_tokens": 4039,
+    "api_call_count": 32
+  },
+  "session_metrics": {
+    "turn_count": 4
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-04-20T11:38:47.744933804Z",
+    "agent_lines": 18,
+    "agent_removed": 1,
+    "human_added": 0,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 18,
+    "total_lines_changed": 19,
+    "agent_percentage": 100,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 661,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/agents/entire-search.md": 25,
+        ".claude/settings.json": 84,
+        ".codex/agents/entire-search.toml": 23,
+        ".codex/config.toml": 3,
+        ".codex/hooks.json": 40,
+        ".cursor/hooks.json": 40,
+        ".gemini/agents/entire-search.md": 28,
+        ".gemini/settings.json": 141,
+        ".github/hooks/entire.json": 61,
+        ".opencode/plugins/entire.ts": 216
+      }
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 679,
+      "agent_lines_removed": 1
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 679,
+      "agent_lines_removed": 1
+    }
+  ]
+}
