@@ -58,6 +58,7 @@ This dramatically reduces checkpoint sizes. Instead of storing ~10 MB per checkp
 - `transcript_preparer`: Maps Zed messages to Entire transcript schema
 - `hooks`: Git hook lifecycle management (post-commit)
 - `token_calculator`: Parses token usage from Zed's `request_token_usage` field
+- `secret_redactor`: Masks sensitive keys (API keys, tokens, etc.) before storage
 
 ## Subcommands
 
@@ -224,6 +225,15 @@ Per-commit token deltas are **not** available retroactively. However, if the pos
 - **Find the most expensive threads**: `jq '.thread_summaries | sort_by(-.tokens.input_tokens) | .[0]'`
 - **Identify orphan research**: orphan threads reveal planning/investigation work that didn't directly produce code
 
+## Security & Privacy
+
+The agent automatically redacts sensitive information from transcripts before they are included in Entire checkpoints:
+
+- **Key Masking**: Sensitive keys (e.g., `api_key`, `private_key`, `token`, `password`, `auth`, `credential`) are partially masked with `*`, preserving only the first 4 characters for debugging.
+- **Type Redaction**: Non-string sensitive values (e.g., objects or booleans assigned to sensitive keys) are replaced with `[REDACTED]`.
+- **Output Truncation**: Tool result outputs are truncated to 100 characters to prevent accidental leakage of large sensitive data blobs.
+- **Automatic Enforcement**: Redaction is applied during every `turn-end` and `checkpoint` event, ensuring that secrets never leave your local environment in a plain-text format.
+
 ## Upstream Entire.io CLI Compatibility
 
 This agent currently exposes a limitation in `entire` v0.5.5 where external agent auto-discovery (`$PATH` scanning for `entire-agent-*` binaries) is filtered out for passive GUI agents. The recommended workaround is to call this binary directly from hooks or use the `install-hooks` subcommand.
@@ -245,7 +255,14 @@ make test && make install
 
 ## Changelog
 
-### 2025-04-19 - Delta Transcript Storage
+### 2026-04-19 - Secret Redaction
+
+- Added automatic secret redaction for tool inputs and outputs (`redactTranscript()`)
+- Added masking for sensitive keys like `api_key`, `private_key`, `token`, etc.
+- Added output truncation for large tool results
+- Added tests for redaction logic in `main_test.go`
+
+### 2026-04-19 - Delta Transcript Storage
 
 - Added OpenCode transcript format conversion (`convertToOpenCodeFormat()`)
 - Added delta tracking with message count watermarks (`extractDeltaTranscript()`)
