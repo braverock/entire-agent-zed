@@ -236,7 +236,23 @@ The agent automatically redacts sensitive information from transcripts before th
 
 ## Upstream Entire.io CLI Compatibility
 
-This agent currently exposes a limitation in `entire` v0.5.5 where external agent auto-discovery (`$PATH` scanning for `entire-agent-*` binaries) is filtered out for passive GUI agents. The recommended workaround is to call this binary directly from hooks or use the `install-hooks` subcommand.
+This agent currently exposes two separate bugs in upstream versions of the `entire` CLI:
+
+### 1. `v0.9.0`: The `entire agent` command group ignores external agents
+In `entire` v0.9.0, the new `entire agent list`, `entire agent add <name>`, and `entire agent remove <name>` subcommands completely omit the required `external.DiscoverAndRegister()` call. Because they don't scan your `$PATH`, they report `Unknown agent "zed"`.
+
+**Workaround for v0.9.0**: The `entire enable` command *does* correctly scan for external agents. Run:
+```bash
+entire enable --agent zed
+```
+
+### 2. `v0.5.5`: Auto-discovery filtered out passive GUI agents
+In older CLI versions (like `v0.5.5`), auto-discovery explicitly filtered out "passive" GUI agents (like Zed or Cursor) under certain conditions.
+
+**Workaround for v0.5.5**: Call this binary directly using the `install-hooks` subcommand:
+```bash
+entire-agent-zed install-hooks
+```
 
 ## Building and Installing
 

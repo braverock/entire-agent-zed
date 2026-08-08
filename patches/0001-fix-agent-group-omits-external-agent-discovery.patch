@@ -1,0 +1,84 @@
+diff --git a/cmd/entire/cli/agent_group.go b/cmd/entire/cli/agent_group.go
+index e4c1d25a..20ee6061 100644
+--- a/cmd/entire/cli/agent_group.go
++++ b/cmd/entire/cli/agent_group.go
+@@ -7,6 +7,7 @@ import (
+ 	"io"
+ 
+ 	"github.com/entireio/cli/cmd/entire/cli/agent"
++	"github.com/entireio/cli/cmd/entire/cli/agent/external"
+ 	"github.com/entireio/cli/cmd/entire/cli/agent/types"
+ 	"github.com/entireio/cli/cmd/entire/cli/paths"
+ 	"github.com/entireio/cli/cmd/entire/cli/settings"
+@@ -34,7 +35,7 @@ Examples:
+ 			if _, err := paths.WorktreeRoot(cmd.Context()); err != nil {
+ 				return errors.New("not a git repository")
+ 			}
+-			return nil
++					return nil
+ 		},
+ 		RunE: func(cmd *cobra.Command, _ []string) error {
+ 			return runAgentMenu(cmd.Context(), cmd.OutOrStdout())
+@@ -48,6 +49,7 @@ Examples:
+ }
+ 
+ func runAgentMenu(ctx context.Context, w io.Writer) error {
++	external.DiscoverAndRegisterAlways(ctx)
+ 	opts := EnableOptions{Telemetry: true}
+ 	if settings.IsSetUpAny(ctx) {
+ 		return runManageAgents(ctx, w, opts, nil)
+@@ -66,6 +68,7 @@ func newAgentListCmd() *cobra.Command {
+ }
+ 
+ func runAgentList(ctx context.Context, w io.Writer) error {
++	external.DiscoverAndRegisterAlways(ctx)
+ 	installed := GetAgentsWithHooksInstalled(ctx)
+ 	installedSet := make(map[types.AgentName]struct{}, len(installed))
+ 	for _, name := range installed {
+@@ -104,6 +107,7 @@ Examples:
+   entire agent add gemini`,
+ 		Args: cobra.ExactArgs(1),
+ 		RunE: func(cmd *cobra.Command, args []string) error {
++			external.DiscoverAndRegisterAlways(cmd.Context())
+ 			name := args[0]
+ 			ag, err := agent.Get(types.AgentName(name))
+ 			if err != nil {
+@@ -138,6 +142,7 @@ Examples:
+   entire agent remove claude-code`,
+ 		Args: cobra.ExactArgs(1),
+ 		RunE: func(cmd *cobra.Command, args []string) error {
++			external.DiscoverAndRegisterAlways(cmd.Context())
+ 			return runRemoveAgent(cmd.Context(), cmd.OutOrStdout(), args[0])
+ 		},
+ 	}
+diff --git a/cmd/entire/cli/agent_group_test.go b/cmd/entire/cli/agent_group_test.go
+index f0a042af..3519c663 100644
+--- a/cmd/entire/cli/agent_group_test.go
++++ b/cmd/entire/cli/agent_group_test.go
+@@ -5,6 +5,7 @@ import (
+ 	"context"
+ 	"strings"
+ 	"testing"
++	"os"
+ 
+ 	"github.com/entireio/cli/cmd/entire/cli/agent"
+ 	"github.com/entireio/cli/cmd/entire/cli/testutil"
+@@ -82,3 +83,18 @@ func TestAgentGroupBareCommandRunsAgentMenu(t *testing.T) {
+ 		t.Fatalf("bare agent command should not fall through to help, got:\n%s", out)
+ 	}
+ }
++
++func TestAgentGroup_DiscoversExternalAgents(t *testing.T) {
++	// Cannot use t.Parallel because we modify PATH via t.Setenv.
++	externalDir := t.TempDir()
++	writeExternalAgentBinary(t, externalDir, "ext-agentgroup-test")
++	t.Setenv("PATH", externalDir+string(os.PathListSeparator)+os.Getenv("PATH"))
++
++	var buf bytes.Buffer
++	if err := runAgentList(context.Background(), &buf); err != nil {
++		t.Fatalf("runAgentList with external: %v", err)
++	}
++	if !strings.Contains(buf.String(), "ext-agentgroup-test") {
++		t.Errorf("expected external agent 'ext-agentgroup-test' in output, got:\n%s", buf.String())
++	}
++}

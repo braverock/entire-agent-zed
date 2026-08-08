@@ -1,34 +1,31 @@
 # Bug Report: `entire agent add/list` does not discover external agents
 
 ## Description
-The `entire agent add <agent>` and `entire agent list` commands omit external agents (like `zed`), failing with `Unknown agent`. However, the external agent works perfectly through `entire enable --agent <agent>` and git hooks.
+The `entire agent add <agent>`, `entire agent remove <agent>`, and `entire agent list` commands omit external agents (like `zed`), failing with `Unknown agent`. However, the exact same external agent works perfectly through `entire enable --agent <agent>` and the various git hook invocations.
 
 ## Root Cause
 In `entireio-cli/cmd/entire/cli/agent_group.go`, the `agent` subcommand group (introduced in commit `c4109895`) does not invoke `external.DiscoverAndRegister(ctx)` or `external.DiscoverAndRegisterAlways(ctx)` prior to listing or retrieving agents.
 
-For instance, in `newAgentAddCmd()`:
+By examining the CLI source codebase, we can see that discovery correctly occurs in most places where agents are retrieved. For instance:
+- `entire enable`: calls `external.DiscoverAndRegisterAlways(ctx)` in `setup.go`.
+- `entire hooks ...`: calls `external.DiscoverAndRegister(discoveryCtx)` in `hooks_cmd.go` and `hooks_git_cmd.go`.
+- `entire attach`: calls `external.DiscoverAndRegister(cmd.Context())` in `attach.go`.
+- `entire explain`: calls `external.DiscoverAndRegister(ctx)` in `explain.go`.
+
+However, for the `entire agent add <name>` flow in `newAgentAddCmd()` (`agent_group.go`):
 
 ```go
 RunE: func(cmd *cobra.Command, args []string) error {
     name := args[0]
-    ag, err := agent.Get(types.AgentName(name))
+    ag, err := agent.Get(types.AgentName(name)) // <-- Fails here, no discovery called!
     // ...
 }
 ```
 
-Since discovery is skipped, `agent.Get()` only checks the statically registered agents, throwing `Unknown agent` for any compliant external agent.
-
-In contrast, `newEnableCmd` correctly performs discovery before retrieving the agent:
-```go
-// From setup.go:newEnableCmd
-external.DiscoverAndRegisterAlways(ctx)
-// ...
-if agentName != "" {
-    ag, err := agent.Get(types.AgentName(agentName))
-```
+Since discovery is skipped entirely, `agent.Get()` only checks the statically registered built-in agents, throwing `Unknown agent` for any compliant external agent on the user's `$PATH`. The exact same omission happens in `newAgentRemoveCmd()` and `newAgentListCmd()`.
 
 ## Expected Behavior
-The `entire agent` noun-group (`add`, `list`, `remove`) should discover external agents to comply with the external agent protocol. `entire agent add zed` should successfully install hooks for the `zed` agent.
+The `entire agent` noun-group (`add`, `list`, `remove`) should discover external agents to comply with the external agent protocol. `entire agent add zed` should successfully install hooks for the `zed` agent just like `entire enable --agent zed` currently does.
 
 ## Suggested Fix
-Call `external.DiscoverAndRegister(ctx)` in `runAgentMenu` (for `list`) and in `newAgentAddCmd`/`newAgentRemoveCmd` prior to invoking `agent.Get()`.
+Call `external.DiscoverAndRegister(ctx)` or `external.DiscoverAndRegisterAlways(ctx)` in `runAgentMenu` (for `list`), and in `newAgentAddCmd`/`newAgentRemoveCmd` prior to invoking `agent.Get()`.
