@@ -49,4 +49,4 @@ func TestAgentGroup_DiscoversExternalAgents(t *testing.T) {
 }
 ```
 
-A complete patch implementing both the fix and this test is included in this repository under `patches/0001-fix-agent-group-omits-external-agent-discovery.patch`.
+A complete patch implementing both the fix and this test is included in this report as `0001-fix-agent-group-omits-external-agent-discovery.patch`.
