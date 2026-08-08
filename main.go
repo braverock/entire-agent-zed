@@ -2015,15 +2015,15 @@ if command -v entire-patched >/dev/null 2>&1; then ENTIRE_CMD="entire-patched"; 
 ENTIRE_STATUS=$($ENTIRE_CMD status 2>/dev/null)
 if ! echo "$ENTIRE_STATUS" | grep -q "Zed ·"; then
     # First commit: initialize session, then start + end the first turn
-    $ENTIRE_CMD hooks zed session-start >/dev/null 2>&1 || true
-    $ENTIRE_CMD hooks zed turn-start >/dev/null 2>&1 || true
+    echo '{}' | $ENTIRE_CMD hooks zed session-start >/dev/null 2>&1 || true
+    echo '{}' | $ENTIRE_CMD hooks zed turn-start >/dev/null 2>&1 || true
 fi
 
 # End the current turn (captures transcript from last commit to this one)
-$ENTIRE_CMD hooks zed turn-end >/dev/null 2>&1 || true
+echo '{}' | $ENTIRE_CMD hooks zed turn-end >/dev/null 2>&1 || true
 
 # Start a new turn for the next unit of work
-$ENTIRE_CMD hooks zed turn-start >/dev/null 2>&1 || true
+echo '{}' | $ENTIRE_CMD hooks zed turn-start >/dev/null 2>&1 || true
 # ---------------------------------------
 `
 
