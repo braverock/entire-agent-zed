@@ -29,3 +29,24 @@ The `entire agent` noun-group (`add`, `list`, `remove`) should discover external
 
 ## Suggested Fix
 Call `external.DiscoverAndRegister(ctx)` or `external.DiscoverAndRegisterAlways(ctx)` in `runAgentMenu` (for `list`), and in `newAgentAddCmd`/`newAgentRemoveCmd` prior to invoking `agent.Get()`.
+
+To reproduce the failure programmatically (and prove the fix), you can use the existing `writeExternalAgentBinary` test helper. If you write a test against `runAgentList` that creates a mock external agent and asserts it appears in the output, it will fail on `v0.9.0` but pass once the discovery calls are added:
+
+```go
+func TestAgentGroup_DiscoversExternalAgents(t *testing.T) {
+	// Cannot use t.Parallel because we modify PATH via t.Setenv.
+	externalDir := t.TempDir()
+	writeExternalAgentBinary(t, externalDir, "ext-agentgroup-test")
+	t.Setenv("PATH", externalDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	var buf bytes.Buffer
+	if err := runAgentList(context.Background(), &buf); err != nil {
+		t.Fatalf("runAgentList with external: %v", err)
+	}
+	if !strings.Contains(buf.String(), "ext-agentgroup-test") {
+		t.Errorf("expected external agent 'ext-agentgroup-test' in output, got:\n%s", buf.String())
+	}
+}
+```
+
+A complete patch implementing both the fix and this test is included in this repository under `patches/0001-fix-agent-group-omits-external-agent-discovery.patch`.
