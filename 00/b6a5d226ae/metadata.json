@@ -1,0 +1,19 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "00b6a5d226ae",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "main.go",
+    "main_test.go"
+  ],
+  "sessions": [
+    {
+      "metadata": "/00/b6a5d226ae/0/metadata.json",
+      "transcript": "/00/b6a5d226ae/0/full.jsonl",
+      "content_hash": "/00/b6a5d226ae/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
