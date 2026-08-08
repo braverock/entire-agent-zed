@@ -1,0 +1,7 @@
+# complete support for entire 0.9.0
+
+read `HANDOFF.md`.  
+
+we're updating the entire-agent-zed plugin in this repo to work with the current version of the entire CLI.
+
+if everything is clear, you can continue, otherwise, stop and ask me qwuestions

@@ -1,0 +1,54 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "67c532d0f49a",
+  "session_id": "zed-f5734f5a-5837-4a50-96d5-cb6c4b61c806",
+  "strategy": "manual-commit",
+  "created_at": "2026-08-08T14:06:45.930115178Z",
+  "branch": "master",
+  "checkpoints_count": 1,
+  "save_step_count": 1,
+  "files_touched": [
+    "main.go"
+  ],
+  "agent": "Zed",
+  "model": "",
+  "turn_id": "c212ee5fb672",
+  "token_usage": {
+    "input_tokens": 5298,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 48393,
+    "output_tokens": 65,
+    "api_call_count": 1
+  },
+  "session_metrics": {
+    "turn_count": 1
+  },
+  "initial_attribution": {
+    "calculated_at": "2026-08-08T14:06:44.844468228Z",
+    "agent_lines": 4,
+    "agent_removed": 4,
+    "human_added": 34,
+    "human_modified": 0,
+    "human_removed": 0,
+    "total_committed": 38,
+    "total_lines_changed": 42,
+    "agent_percentage": 19.047619047619047,
+    "metric_version": 2
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 1,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 4,
+      "agent_lines_removed": 4
+    }
+  ]
+}
