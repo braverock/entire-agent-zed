@@ -1,0 +1,18 @@
+{
+  "cli_version": "0.9.0",
+  "checkpoint_id": "4ab6cdff7f84",
+  "strategy": "manual-commit",
+  "branch": "master",
+  "checkpoints_count": 4,
+  "files_touched": [
+    "HANDOFF.md"
+  ],
+  "sessions": [
+    {
+      "metadata": "/4a/b6cdff7f84/0/metadata.json",
+      "transcript": "/4a/b6cdff7f84/0/full.jsonl",
+      "content_hash": "/4a/b6cdff7f84/0/content_hash.txt",
+      "prompt": ""
+    }
+  ]
+}
