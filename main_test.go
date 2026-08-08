@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -369,6 +370,215 @@ func TestBinary_Stop(t *testing.T) {
 	out, err := exec.Command(bin, "stop").CombinedOutput()
 	if err != nil {
 		t.Fatalf("stop failed: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "{}" {
+		t.Errorf("expected {}, got %q", string(out))
+	}
+}
+
+func TestBinary_Detect(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "detect").CombinedOutput()
+	if err != nil {
+		t.Fatalf("detect failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := result["present"].(bool); !ok {
+		t.Errorf("expected present bool, got %v", result["present"])
+	}
+}
+
+func TestBinary_GetSessionID(t *testing.T) {
+	bin := buildBinary(t)
+	cmd := exec.Command(bin, "get-session-id")
+	cmd.Stdin = strings.NewReader(`{"session_id": "zed-abc123"}`)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("get-session-id failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if result["session_id"] != "zed-abc123" {
+		t.Errorf("expected session_id=zed-abc123, got %v", result["session_id"])
+	}
+}
+
+func TestBinary_GetSessionID_Fallback(t *testing.T) {
+	bin := buildBinary(t)
+	cmd := exec.Command(bin, "get-session-id")
+	cmd.Stdin = strings.NewReader(`{}`)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("get-session-id failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	sid, ok := result["session_id"].(string)
+	if !ok || sid == "" {
+		t.Errorf("expected non-empty session_id, got %v", result["session_id"])
+	}
+}
+
+func TestBinary_ReadSession(t *testing.T) {
+	bin := buildBinary(t)
+	cmd := exec.Command(bin, "read-session")
+	cmd.Stdin = strings.NewReader(`{"session_id": "zed-abc123"}`)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("read-session failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if result["session_id"] != "zed-abc123" {
+		t.Errorf("expected session_id=zed-abc123, got %v", result["session_id"])
+	}
+	if result["agent_name"] != "zed" {
+		t.Errorf("expected agent_name=zed, got %v", result["agent_name"])
+	}
+}
+
+func TestBinary_WriteSession(t *testing.T) {
+	bin := buildBinary(t)
+	cmd := exec.Command(bin, "write-session")
+	cmd.Stdin = strings.NewReader(`{"session_id": "zed-abc123", "agent_name": "zed"}`)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("write-session failed: %v\n%s", err, out)
+	}
+	if strings.TrimSpace(string(out)) != "{}" {
+		t.Errorf("expected {}, got %q", string(out))
+	}
+}
+
+func TestBinary_ChunkTranscript(t *testing.T) {
+	bin := buildBinary(t)
+	cmd := exec.Command(bin, "chunk-transcript", "--max-size", "5")
+	cmd.Stdin = strings.NewReader("hello world")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("chunk-transcript failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	chunks, ok := result["chunks"].([]interface{})
+	if !ok || len(chunks) != 3 {
+		t.Errorf("expected 3 chunks, got %v", result["chunks"])
+	}
+}
+
+func TestBinary_ReassembleTranscript(t *testing.T) {
+	bin := buildBinary(t)
+	chunkCmd := exec.Command(bin, "chunk-transcript", "--max-size", "5")
+	chunkCmd.Stdin = strings.NewReader("hello world")
+	chunkOut, err := chunkCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("chunk-transcript failed: %v", err)
+	}
+
+	reCmd := exec.Command(bin, "reassemble-transcript")
+	reCmd.Stdin = bytes.NewReader(chunkOut)
+	reOut, err := reCmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("reassemble-transcript failed: %v\n%s", err, reOut)
+	}
+	if string(reOut) != "hello world" {
+		t.Errorf("expected 'hello world', got %q", string(reOut))
+	}
+}
+
+func TestBinary_FormatResumeCommand(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "format-resume-command", "--session-id", "zed-abc123").CombinedOutput()
+	if err != nil {
+		t.Fatalf("format-resume-command failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := result["command"].(string); !ok {
+		t.Errorf("expected command string, got %v", result["command"])
+	}
+}
+
+func TestBinary_GetTranscriptPosition(t *testing.T) {
+	bin := buildBinary(t)
+	tmp := filepath.Join(t.TempDir(), "transcript.json")
+	os.WriteFile(tmp, []byte("0123456789"), 0644)
+	out, err := exec.Command(bin, "get-transcript-position", "--path", tmp).CombinedOutput()
+	if err != nil {
+		t.Fatalf("get-transcript-position failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if result["position"] != float64(10) {
+		t.Errorf("expected position=10, got %v", result["position"])
+	}
+}
+
+func TestBinary_ExtractModifiedFiles_NoDB(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "extract-modified-files", "--path", "/nonexistent", "--offset", "0").CombinedOutput()
+	if err != nil {
+		t.Fatalf("extract-modified-files failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := result["files"].([]interface{}); !ok {
+		t.Errorf("expected files array, got %v", result["files"])
+	}
+}
+
+func TestBinary_ExtractPrompts_NoDB(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "extract-prompts", "--session-ref", "/nonexistent", "--offset", "0").CombinedOutput()
+	if err != nil {
+		t.Fatalf("extract-prompts failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := result["prompts"].([]interface{}); !ok {
+		t.Errorf("expected prompts array, got %v", result["prompts"])
+	}
+}
+
+func TestBinary_ExtractSummary_NoDB(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "extract-summary", "--session-ref", "/nonexistent").CombinedOutput()
+	if err != nil {
+		t.Fatalf("extract-summary failed: %v\n%s", err, out)
+	}
+	var result map[string]interface{}
+	if err := json.Unmarshal(out, &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, out)
+	}
+	if _, ok := result["has_summary"].(bool); !ok {
+		t.Errorf("expected has_summary bool, got %v", result["has_summary"])
+	}
+}
+
+func TestBinary_PrepareTranscript(t *testing.T) {
+	bin := buildBinary(t)
+	out, err := exec.Command(bin, "prepare-transcript", "--session-ref", "/nonexistent").CombinedOutput()
+	if err != nil {
+		t.Fatalf("prepare-transcript failed: %v\n%s", err, out)
 	}
 	if strings.TrimSpace(string(out)) != "{}" {
 		t.Errorf("expected {}, got %q", string(out))

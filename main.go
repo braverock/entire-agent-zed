@@ -12,6 +12,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -142,6 +143,8 @@ func main() {
 		printHelp()
 	case "info":
 		handleInfo()
+	case "detect":
+		handleDetect()
 	case "transcript":
 		handleTranscript()
 	case "start":
@@ -150,10 +153,34 @@ func main() {
 		handleStop()
 	case "parse-hook":
 		handleParseHook()
+	case "get-session-id":
+		handleGetSessionID()
 	case "get-session-dir":
 		handleGetSessionDir()
 	case "resolve-session-file":
 		handleResolveSessionFile()
+	case "read-session":
+		handleReadSession()
+	case "write-session":
+		handleWriteSession()
+	case "read-transcript":
+		handleReadTranscript()
+	case "chunk-transcript":
+		handleChunkTranscript()
+	case "reassemble-transcript":
+		handleReassembleTranscript()
+	case "format-resume-command":
+		handleFormatResumeCommand()
+	case "get-transcript-position":
+		handleGetTranscriptPosition()
+	case "extract-modified-files":
+		handleExtractModifiedFiles()
+	case "extract-prompts":
+		handleExtractPrompts()
+	case "extract-summary":
+		handleExtractSummary()
+	case "prepare-transcript":
+		handlePrepareTranscript()
 	case "install-hooks":
 		handleInstallHooks()
 	case "uninstall-hooks":
@@ -238,6 +265,12 @@ func handleInfo() {
 		"name":             "zed",
 		"type":             "Zed",
 		"description":      "Zed AI Assistant",
+		"hook_names": []string{
+			"session-start",
+			"turn-start",
+			"turn-end",
+			"session-end",
+		},
 		"capabilities": map[string]bool{
 			"transcript_analyzer": true,
 			"transcript_preparer": true,
@@ -1590,6 +1623,338 @@ func handleResolveSessionFile() {
 	out := map[string]interface{}{
 		"session_file": dbPath,
 	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleDetect() {
+	present := false
+	if _, err := getZedDBPath(); err == nil {
+		present = true
+	}
+	out := map[string]interface{}{
+		"present": present,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+// flagValue returns the value for a --flag argument, or "" if absent.
+func flagValue(name string) string {
+	for i, arg := range os.Args {
+		if arg == name && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+	}
+	return ""
+}
+
+func flagInt(name string, def int) int {
+	v := flagValue(name)
+	if v == "" {
+		return def
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
+// readStdin reads all of stdin as bytes.
+func readStdin() []byte {
+	data, _ := io.ReadAll(os.Stdin)
+	return data
+}
+
+// openDBFromRef opens the Zed threads database read-only. If sessionRef is a
+// real file path it is used directly; otherwise the default Zed DB is used.
+func openDBFromRef(sessionRef string) (*sql.DB, string, error) {
+	dbPath := sessionRef
+	if dbPath == "" || dbPath == "zed-db" {
+		p, err := getZedDBPath()
+		if err != nil {
+			return nil, "", err
+		}
+		dbPath = p
+	}
+	db, err := sql.Open("sqlite3", dbPath+"?mode=ro")
+	if err != nil {
+		return nil, "", err
+	}
+	return db, dbPath, nil
+}
+
+// fetchRawFromRef returns the raw decompressed transcript bytes for the
+// latest thread, reading from the given session ref (DB path) or the default DB.
+func fetchRawFromRef(sessionRef string) ([]byte, error) {
+	db, _, err := openDBFromRef(sessionRef)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+	_, raw, err := fetchLatestThread(db)
+	return raw, err
+}
+
+func handleGetSessionID() {
+	var payload map[string]interface{}
+	if err := json.NewDecoder(os.Stdin).Decode(&payload); err != nil && err != io.EOF {
+		// proceed with empty payload
+	}
+
+	sessionID := ""
+	if sid, ok := payload["session_id"].(string); ok && sid != "" {
+		sessionID = sid
+	}
+	if sessionID == "" {
+		threadID, _, _, _ := getLatestThreadMeta()
+		if threadID != "" {
+			sessionID = "zed-" + threadID
+		} else {
+			sessionID = "zed-current"
+		}
+	}
+
+	out := map[string]interface{}{
+		"session_id": sessionID,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleReadSession() {
+	var payload map[string]interface{}
+	if err := json.NewDecoder(os.Stdin).Decode(&payload); err != nil && err != io.EOF {
+		// proceed with empty payload
+	}
+
+	sessionID := ""
+	if sid, ok := payload["session_id"].(string); ok && sid != "" {
+		sessionID = sid
+	}
+	threadID, _, _, rawData := getLatestThreadMeta()
+	if sessionID == "" {
+		if threadID != "" {
+			sessionID = "zed-" + threadID
+		} else {
+			sessionID = "zed-current"
+		}
+	}
+
+	dbPath, _ := getZedDBPath()
+	repoRoot := os.Getenv("ENTIRE_REPO_ROOT")
+	if repoRoot == "" {
+		if out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output(); err == nil {
+			repoRoot = strings.TrimSpace(string(out))
+		}
+	}
+
+	out := map[string]interface{}{
+		"session_id":  sessionID,
+		"agent_name":  "zed",
+		"repo_path":   repoRoot,
+		"session_ref": dbPath,
+		"start_time":  time.Now().Format(time.RFC3339),
+	}
+	if rawData != nil {
+		out["native_data"] = rawData
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleWriteSession() {
+	var sess map[string]interface{}
+	if err := json.NewDecoder(os.Stdin).Decode(&sess); err != nil && err != io.EOF {
+		// proceed with empty payload
+	}
+
+	sessionID, _ := sess["session_id"].(string)
+	if sessionID != "" {
+		writeSessionSnapshot(sessionID, "", "", "active", nil)
+	}
+
+	out := map[string]interface{}{}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleReadTranscript() {
+	sessionRef := flagValue("--session-ref")
+	raw, err := fetchRawFromRef(sessionRef)
+	if err != nil {
+		fmt.Println("{}")
+		return
+	}
+	os.Stdout.Write(raw)
+}
+
+func handleChunkTranscript() {
+	maxSize := flagInt("--max-size", 1024*1024)
+	if maxSize <= 0 {
+		maxSize = 1024 * 1024
+	}
+	data := readStdin()
+
+	var chunks [][]byte
+	for len(data) > 0 {
+		n := len(data)
+		if n > maxSize {
+			n = maxSize
+		}
+		chunks = append(chunks, data[:n])
+		data = data[n:]
+	}
+
+	out := map[string]interface{}{
+		"chunks": chunks,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleReassembleTranscript() {
+	var req struct {
+		Chunks [][]byte `json:"chunks"`
+	}
+	if err := json.NewDecoder(os.Stdin).Decode(&req); err != nil {
+		fmt.Println("{}")
+		return
+	}
+	var buf bytes.Buffer
+	for _, c := range req.Chunks {
+		buf.Write(c)
+	}
+	os.Stdout.Write(buf.Bytes())
+}
+
+func handleFormatResumeCommand() {
+	// Zed has no CLI resume command; return an empty command.
+	out := map[string]interface{}{
+		"command": "",
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleGetTranscriptPosition() {
+	path := flagValue("--path")
+	pos := 0
+	if path != "" {
+		if info, err := os.Stat(path); err == nil {
+			pos = int(info.Size())
+		}
+	}
+	out := map[string]interface{}{
+		"position": pos,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+// extractFilePathsFromTool returns file paths referenced by a tool use input.
+func extractFilePathsFromTool(tool EntireTool) []string {
+	var paths []string
+	for _, key := range []string{"path", "new_path", "file_path", "filePath"} {
+		if v, ok := tool.Params[key].(string); ok && v != "" {
+			paths = append(paths, v)
+		}
+	}
+	return paths
+}
+
+func handleExtractModifiedFiles() {
+	path := flagValue("--path")
+	offset := flagInt("--offset", 0)
+
+	raw, err := fetchRawFromRef(path)
+	if err != nil {
+		out := map[string]interface{}{"files": []string{}, "current_position": offset}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+
+	transcript, err := parseTranscript(raw)
+	if err != nil {
+		out := map[string]interface{}{"files": []string{}, "current_position": offset}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+
+	files := []string{}
+	seen := map[string]bool{}
+	currentPos := offset
+	for i := offset; i < len(transcript); i++ {
+		currentPos = i
+		for _, tool := range transcript[i].Tools {
+			for _, f := range extractFilePathsFromTool(tool) {
+				if !seen[f] {
+					seen[f] = true
+					files = append(files, f)
+				}
+			}
+		}
+	}
+
+	out := map[string]interface{}{
+		"files":            files,
+		"current_position": currentPos,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleExtractPrompts() {
+	sessionRef := flagValue("--session-ref")
+	offset := flagInt("--offset", 0)
+
+	raw, err := fetchRawFromRef(sessionRef)
+	if err != nil {
+		out := map[string]interface{}{"prompts": []string{}}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+
+	transcript, err := parseTranscript(raw)
+	if err != nil {
+		out := map[string]interface{}{"prompts": []string{}}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+
+	var prompts []string
+	for i := offset; i < len(transcript); i++ {
+		if transcript[i].Role == "user" && strings.TrimSpace(transcript[i].Content) != "" {
+			prompts = append(prompts, transcript[i].Content)
+		}
+	}
+
+	out := map[string]interface{}{
+		"prompts": prompts,
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handleExtractSummary() {
+	sessionRef := flagValue("--session-ref")
+
+	db, _, err := openDBFromRef(sessionRef)
+	if err != nil {
+		out := map[string]interface{}{"summary": "", "has_summary": false}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+	defer db.Close()
+
+	t, _, err := fetchLatestThread(db)
+	if err != nil {
+		out := map[string]interface{}{"summary": "", "has_summary": false}
+		json.NewEncoder(os.Stdout).Encode(out)
+		return
+	}
+
+	out := map[string]interface{}{
+		"summary":     t.Summary,
+		"has_summary": t.Summary != "",
+	}
+	json.NewEncoder(os.Stdout).Encode(out)
+}
+
+func handlePrepareTranscript() {
+	// The Zed DB is always materialized; nothing to prepare.
+	out := map[string]interface{}{}
 	json.NewEncoder(os.Stdout).Encode(out)
 }
 
