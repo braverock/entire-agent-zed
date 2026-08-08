@@ -1,0 +1,27 @@
+# complete support for entire 0.9.0
+
+read `HANDOFF.md`.  
+
+we're updating the entire-agent-zed plugin in this repo to work with the current version of the entire CLI.
+
+if everything is clear, you can continue, otherwise, stop and ask me qwuestions
+
+---
+
+let's do a more thorough investigation first. where does the entire CLI use  `external.DiscoverAndRegister` and where does it skip it.  I want to be very clear both in our README (not in the list but it still works) and in the proposed bug report.  is this clear?
+
+---
+
+can we craft a minimal test and patch following the entire team's standards that would resolve this issue?
+
+---
+
+why is your suggested patch adding an entire function rather than just alling their existing functionality using the pattern that is used elsewhere in their code?
+
+---
+
+ok, so that detail is probably relevant to our bug report, right?
+
+---
+
+I think rather than pointing them at our patches directory, we should just attach the patch files to the report

@@ -3,7 +3,7 @@
   "checkpoint_id": "4ab6cdff7f84",
   "strategy": "manual-commit",
   "branch": "master",
-  "checkpoints_count": 4,
+  "checkpoints_count": 5,
   "files_touched": [
     "HANDOFF.md"
   ],
@@ -13,6 +13,19 @@
       "transcript": "/4a/b6cdff7f84/0/full.jsonl",
       "content_hash": "/4a/b6cdff7f84/0/content_hash.txt",
       "prompt": ""
+    },
+    {
+      "metadata": "/4a/b6cdff7f84/1/metadata.json",
+      "transcript": "/4a/b6cdff7f84/1/full.jsonl",
+      "content_hash": "/4a/b6cdff7f84/1/content_hash.txt",
+      "prompt": "/4a/b6cdff7f84/1/prompt.txt"
     }
-  ]
+  ],
+  "token_usage": {
+    "input_tokens": 271389,
+    "cache_creation_tokens": 0,
+    "cache_read_tokens": 610678,
+    "output_tokens": 4145,
+    "api_call_count": 11
+  }
 }
